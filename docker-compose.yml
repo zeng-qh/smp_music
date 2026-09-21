@@ -1,0 +1,40 @@
+services:
+  music:
+    # 本地构建用 build；推送到 GHCR 后可改成
+    #   image: ghcr.io/<你的用户名>/mpd-web-player:latest
+    build: .
+    image: mpd-web-player:latest
+    container_name: music-player
+    restart: unless-stopped
+
+    # 3.5mm / HDMI 等本地声卡
+    devices:
+      - /dev/snd:/dev/snd
+
+    volumes:
+      # 宿主机蓝牙 (bluetoothd + bluealsa) 的 D-Bus，容器内访问蓝牙音箱要用
+      - /var/run/dbus:/var/run/dbus
+      # 音乐目录。想挂多个就照下面加几行，挂到 /music 的不同子目录：
+      #   - /vol1/music/album:/music/album:ro
+      #   - /vol1/music/podcast:/music/podcast:ro
+      - ${MUSIC_DIR:-./music}:/music
+      # 持久化：曲库索引 + myMPD 状态（含用户设置）
+      - ./data/mpd:/var/lib/mpd
+      - ./data/mympd:/var/lib/mympd
+
+    ports:
+      - "${WEB_PORT:-8080}:80"      # 网页控制台（带登录）
+      - "${STREAM_PORT:-8000}:8000" # 音频流：用当前访问的设备播放时打开
+
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      MUSIC_DIR: /music
+      # 默认启用哪块声卡（按名字关键字匹配）。你的机器上是 Headphones = 3.5mm
+      # 想默认走 HDMI 就填 vc4-hdmi-0 或 vc4-hdmi-1
+      DEFAULT_CARD: ${DEFAULT_CARD:-Headphones}
+      ENABLE_BLUETOOTH: ${ENABLE_BLUETOOTH:-yes}
+      # 蓝牙音箱 MAC（AA:BB:CC:DD:EE:FF）。留空则 MPD 连当前已配对的默认设备
+      BT_MAC: ${BT_MAC:-}
+      WEB_USER: ${WEB_USER:-admin}
+      # 强烈建议改掉；留空则容器启动时生成随机口令并打印在日志里
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
