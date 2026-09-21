@@ -1,0 +1,8 @@
+# 强制这些文件在仓库和工作区都用 LF —— CRLF 会让容器里的
+# #!/usr/bin/env bash\r 报 bad interpreter，也会让 nginx/supervisor 配置解析异常
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.conf      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.example   text eol=lf
