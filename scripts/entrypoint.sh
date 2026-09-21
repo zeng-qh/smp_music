@@ -20,6 +20,18 @@ MYMPD_CONF_DIR=/var/lib/mympd/config
 # v8.0.0 起 mympd.conf 被废弃，配置是 /var/lib/mympd/config/ 下的纯文本文件（文件名=键，内容=值）
 mkdir -p "$MYMPD_CONF_DIR" /var/cache/mympd /var/lib/mympd
 
+# 保险一：首次运行时让 myMPD 自己生成一份配置。
+# myMPD 支持 MYMPD_<大写配置项> 环境变量，这样即使新版本改了配置文件的写法也能生效。
+if [ ! -e "${MYMPD_CONF_DIR}/http_port" ] && [ ! -e "${MYMPD_CONF_DIR}/ssl" ]; then
+    MYMPD_HTTP_HOST=0.0.0.0 \
+    MYMPD_HTTP_PORT="${MYMPD_PORT}" \
+    MYMPD_SSL=false \
+    MYMPD_MPD_HOST=127.0.0.1 \
+    MYMPD_MPD_PORT=6600 \
+        mympd -c 2>&1 | head -20 || echo "[warn] mympd -c 未成功，改用直接写配置文件"
+fi
+
+# 保险二：直接写配置文件（v8.0.0 起 /var/lib/mympd/config/ 下是一文件一值）
 set_conf() { printf '%s\n' "$2" > "${MYMPD_CONF_DIR}/$1"; }
 
 set_conf http_host "0.0.0.0"
