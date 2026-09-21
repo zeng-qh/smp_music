@@ -23,33 +23,30 @@ RUN set -eux; \
 
 # ---------- 2. myMPD ----------
 # myMPD 从未被 Debian 官方源收录（packages.debian.org 全套件搜索零结果），
-# 只能从作者维护的 openSUSE OBS 仓库取。这里两条路都留了：
-#   路 A（优先）：直接下载对应架构的 .deb 装。不依赖 GPG 签名、不依赖仓库索引，最稳。
-#   路 B（兜底）：走 OBS apt 仓库。OBS 的签名密钥历史上有过过期
-#                （2025-02 那次导致大批用户 apt update 直接失败），所以这里统一用
-#                trusted=yes，避免哪天密钥又过期把构建搞挂。
+# 只能从作者维护的 openSUSE OBS 仓库取。
+# 关键顺序：必须先「配置 OBS 仓库 + apt-get update」，再安装。
+#   - 用 trusted=yes 绕过 OBS 历史上过期过的 GPG 密钥（2025-02 那次导致大批用户 apt update 失败）。
+#   - 先 update 是为了让 mympd 的全部依赖都能从 OBS 索引里解析到（直接 dpkg -i .deb 时缺依赖可 apt -f 修复）。
+# 安装分两步：优先直连下载对应架构的 .deb 本地装（最快、不依赖索引解析）；
+#             直连失败再退回 apt-get install mympd（索引已在上面 update 过，依赖齐全）。
 # 仓库名按基础镜像的 VERSION_ID 自动匹配（bookworm=12 -> Debian_12，trixie=13 -> Debian_13）。
 RUN set -eux; \
     . /etc/os-release; \
-    ARCH="\$(dpkg --print-architecture)"; \
-    BASE="https://download.opensuse.org/repositories/home:/jcorporation/Debian_\${VERSION_ID}"; \
-    DEB="\$(curl -fsSL "\${BASE}/\${ARCH}/" \
-          | grep -oE "mympd_[0-9.]+-[0-9]+_\${ARCH}\.deb" | sort -V | tail -1)"; \
-    OK=0; \
-    if [ -n "\$DEB" ] && curl -fsSL -o /tmp/mympd.deb "\${BASE}/\${ARCH}/\${DEB}"; then \
-        echo "[info] 直连下载 \${DEB}"; \
-        if apt-get install -y --no-install-recommends /tmp/mympd.deb \
-           || apt-get -f install -y --no-install-recommends; then OK=1; fi; \
-        rm -f /tmp/mympd.deb; \
-    fi; \
-    if [ "\$OK" != "1" ]; then \
-        echo "[warn] 直连安装失败，退化为 OBS apt 仓库"; \
-        echo "deb [trusted=yes] \${BASE}/ ./" > /etc/apt/sources.list.d/mympd.list; \
-        apt-get update; \
+    ARCH="$(dpkg --print-architecture)"; \
+    REPO="https://download.opensuse.org/repositories/home:/jcorporation/Debian_${VERSION_ID}"; \
+    echo "deb [trusted=yes] ${REPO}/ ./" > /etc/apt/sources.list.d/mympd.list; \
+    apt-get update; \
+    DEB="$(curl -fsSL "${REPO}/${ARCH}/" \
+          | grep -oE "mympd_[0-9.]+-[0-9]+_${ARCH}\.deb" | sort -V | tail -1)"; \
+    if [ -n "$DEB" ] && curl -fsSL -o /tmp/mympd.deb "${REPO}/${ARCH}/${DEB}"; then \
+        echo "[info] 直连下载 ${DEB}"; \
+        dpkg -i /tmp/mympd.deb || apt-get install -f -y --no-install-recommends; \
+    else \
+        echo "[warn] 直连下载失败，退回 OBS apt 仓库安装"; \
         apt-get install -y --no-install-recommends mympd; \
-        rm -f /etc/apt/sources.list.d/mympd.list; \
     fi; \
     command -v mympd; \
+    rm -f /tmp/mympd.deb /etc/apt/sources.list.d/mympd.list; \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /var/lib/mpd/playlists /var/log/mpd /run/mpd \
