@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # arm64 用 QEMU 模拟构建（比原生慢，第一次大约 10~20 分钟）
+      # arm64 用 QEMU 模拟构建（比原生慢，第一次大约 10~20 ）
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
